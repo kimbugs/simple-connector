@@ -2,6 +2,7 @@ package influxdb
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
@@ -12,6 +13,7 @@ import (
 type Influxdb struct {
 	client   influxdb2.Client
 	writeAPI api.WriteAPI
+	queryAPI api.QueryAPI
 }
 
 // NewClient : simple influxdb client
@@ -28,6 +30,7 @@ func NewClient(url string, bucket string, org string, token string) (
 		SetRetryInterval(5)
 	influx.client = influxdb2.NewClientWithOptions("http://"+url, token, opts)
 	influx.writeAPI = influx.client.WriteAPI(org, bucket)
+	influx.queryAPI = influx.client.QueryAPI(org)
 
 	if _, err := influx.client.Ready(context.Background()); err != nil {
 		return nil, err
@@ -41,6 +44,16 @@ func (influx *Influxdb) Close() {
 	influx.client.Close()
 }
 
+// QueryToBucket : influxdb Query To Bucket
+func (influx *Influxdb) QueryToBucket(query string, bucket string, org string) error {
+	plusQuery := fmt.Sprintf(`|> to(bucket: "%s", org: "%s")`, bucket, org)
+	queryResult := query + plusQuery
+	_, err := influx.queryAPI.QueryRaw(context.Background(), queryResult, influxdb2.DefaultDialect())
+
+	return err
+}
+
+// Write : influxdb Write data
 func (influx *Influxdb) Write(measurement string, tags map[string]string,
 	fields map[string]interface{}) {
 	p := influxdb2.NewPoint(measurement, tags, fields, time.Now())
